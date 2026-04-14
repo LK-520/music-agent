@@ -131,18 +131,37 @@ class Resolver:
         return True
 
     def _score_track(self, track: Track, query: str) -> Track:
+        raw_title = (track.title or "").lower()
         title = normalize_title(track.title)
         artist = normalize_title(track.artist)
         score = self.platform_weight.get(track.source, 0.0)
         tokens = query_tokens(query)
-        if title == normalize_title(query):
-            score += 0.8
+        normalized_query = normalize_title(query)
+        if title == normalized_query:
+            score += 0.9
+        elif normalized_query and normalized_query in title:
+            score += 0.35
         matched = sum(1 for token in tokens if token in title or token in artist)
         if tokens:
             score += matched / len(tokens)
+        title_matched = sum(1 for token in tokens if token in title)
+        if tokens and title_matched == len(tokens):
+            score += 0.2
         artist_matched = sum(1 for token in tokens if token in artist)
         if artist_matched:
-            score += 0.15 * artist_matched
+            score += 0.45 * artist_matched
+        elif len(tokens) >= 2:
+            score -= 0.25
+        first_token = normalize_title(tokens[0]) if tokens else ""
+        last_token = normalize_title(tokens[-1]) if tokens else ""
+        if first_token and artist == first_token:
+            score += 0.9
+        elif first_token and first_token in artist:
+            score += 0.35
+        if last_token and title == last_token:
+            score += 1.0
+        elif last_token and (title.startswith(last_token) or title.endswith(last_token)):
+            score += 0.45
         if track.duration_sec is not None:
             if 120 <= track.duration_sec <= 360:
                 score += 0.2
@@ -150,21 +169,41 @@ class Resolver:
                 score -= 0.1
             elif 360 < track.duration_sec <= 900:
                 score -= 0.05
-        if "official" in title or "原唱" in title or "music video" in title:
-            score += 0.2
+        bonus_terms = {
+            "official": 0.28,
+            "官方": 0.28,
+            "原唱": 0.45,
+            "official audio": 0.3,
+            "music video": 0.18,
+            "mv": 0.08,
+        }
+        for term, bonus in bonus_terms.items():
+            if term in raw_title or term in artist:
+                score += bonus
+        if " - " in (track.title or ""):
+            prefix = normalize_title((track.title or "").split(" - ", 1)[0])
+            if prefix and not any(token in prefix for token in tokens) and prefix not in artist:
+                score -= 0.4
         penalty_terms = {
             "remix": 0.3,
-            "cover": 0.18,
+            "cover": 0.35,
+            "翻唱": 0.45,
             "歌词": 0.12,
             "lyric": 0.12,
             "合集": 0.4,
             "串烧": 0.35,
             "纯享": 0.15,
             "伴奏": 0.4,
+            "karaoke": 0.5,
+            "instrumental": 0.55,
+            "inst": 0.5,
+            "纯音乐": 0.55,
+            "片段": 0.25,
+            "剪辑": 0.25,
             "dj": 0.2,
         }
         for term, penalty in penalty_terms.items():
-            if term in title:
+            if term in raw_title:
                 score -= penalty
         track.rank_score = round(score, 4)
         return track

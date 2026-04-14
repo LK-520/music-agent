@@ -10,6 +10,7 @@ LOG_PATH = APP_DIR / "musicd.log"
 MPV_SOCKET_PATH = APP_DIR / "mpv.sock"
 MPV_PID_PATH = APP_DIR / "mpv.pid"
 LOCK_PATH = APP_DIR / "musicd.lock"
+STATUS_JSON_PATH = APP_DIR / "status.json"
 
 
 def ensure_runtime_dir() -> Path:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+import json
 from typing import Optional
 
 from musicd.player_mpv import MpvPlayer
@@ -9,6 +10,7 @@ from musicd.resolver import Resolver
 from shared.errors import MusicError, invalid_argument
 from shared.lang import DEFAULT_LANG, display_lang, normalize_lang
 from shared.models import PlaybackState, Queue, Track
+from shared.runtime import STATUS_JSON_PATH, ensure_runtime_dir
 
 
 class PlaybackManager:
@@ -52,7 +54,7 @@ class PlaybackManager:
                 raise MusicError("NOTHING_PLAYING", "当前没有正在播放的音乐")
             self.player.set_pause(True)
             self.state.state = "paused"
-            return {"ok": True, "action": "pause"}
+            return self._with_status({"ok": True, "action": "pause"})
 
     def resume(self) -> dict:
         with self.lock:
@@ -60,17 +62,19 @@ class PlaybackManager:
                 raise MusicError("NOTHING_TO_RESUME", "当前没有可恢复的播放内容")
             self.player.set_pause(False)
             self.state.state = "playing"
-            return {"ok": True, "action": "resume", "track": self.state.current_track.to_dict()}
+            return self._with_status(
+                {"ok": True, "action": "resume", "track": self.state.current_track.to_dict()}
+            )
 
     def next_track(self) -> dict:
         with self.lock:
             track = self._advance(1)
-            return {"ok": True, "action": "next", "track": track.to_dict()}
+            return self._with_status({"ok": True, "action": "next", "track": track.to_dict()})
 
     def prev_track(self) -> dict:
         with self.lock:
             track = self._advance(-1)
-            return {"ok": True, "action": "prev", "track": track.to_dict()}
+            return self._with_status({"ok": True, "action": "prev", "track": track.to_dict()})
 
     def stop(self) -> dict:
         with self.lock:
@@ -84,7 +88,7 @@ class PlaybackManager:
             self.state.state = "idle"
             self.state.error_code = None
             self.state.message = None
-            return {"ok": True, "action": "stop"}
+            return self._with_status({"ok": True, "action": "stop"})
 
     def shutdown(self) -> dict:
         with self.lock:
@@ -101,38 +105,15 @@ class PlaybackManager:
             self.state.state = "idle"
             self.state.error_code = None
             self.state.message = None
-            return {"ok": True, "action": "shutdown"}
+            return self._with_status({"ok": True, "action": "shutdown"})
 
     def status(self) -> dict:
         with self.lock:
-            queue_total = self.state.queue.total if self.state.queue else 0
-            queue_index = self.state.queue.current_index if self.state.queue else None
-            next_track = None
-            elapsed_sec = None
-            duration_sec = None
-            if self.state.queue and self.state.queue.items and queue_index:
-                next_index = (queue_index % len(self.state.queue.items))
-                next_track = self.state.queue.items[next_index].to_dict()
-            if self.state.state in {"playing", "paused"} and self.state.current_track:
-                elapsed_sec = self.player.get_property("time-pos", 0) or 0
-                duration_sec = self.player.get_property("duration", self.state.current_track.duration_sec)
-            return {
-                "ok": True,
-                "action": "status",
-                "state": self.state.state,
-                "volume": self.state.volume,
-                "muted": self.state.muted,
-                "queue_total": queue_total,
-                "queue_index": queue_index,
-                "loop": True,
-                "lang": self.state.lang_preference,
-                "track": self.state.current_track.to_dict() if self.state.current_track else None,
-                "next_track": next_track,
-                "elapsed_sec": elapsed_sec,
-                "duration_sec": duration_sec,
-                "error_code": self.state.error_code,
-                "message": self.state.message,
-            }
+            payload = self._status_payload()
+            self._persist_status_snapshot(payload)
+        payload["ok"] = True
+        payload["action"] = "status"
+        return payload
 
     def set_volume(self, value: int) -> dict:
         if value < 0 or value > 100:
@@ -142,7 +123,7 @@ class PlaybackManager:
             self.state.volume = value
             if value > 0:
                 self.state.last_nonzero_volume = value
-            return {"ok": True, "action": "volume", "volume": value}
+            return self._with_status({"ok": True, "action": "volume", "volume": value})
 
     def volume_up(self) -> dict:
         return self.set_volume(min(100, self.state.volume + 5))
@@ -157,7 +138,7 @@ class PlaybackManager:
             self.player.set_volume(0)
             self.state.muted = True
             self.state.volume = 0
-            return {"ok": True, "action": "mute"}
+            return self._with_status({"ok": True, "action": "mute"})
 
     def unmute(self) -> dict:
         with self.lock:
@@ -165,7 +146,7 @@ class PlaybackManager:
             self.player.set_volume(volume)
             self.state.muted = False
             self.state.volume = volume
-            return {"ok": True, "action": "unmute", "volume": volume}
+            return self._with_status({"ok": True, "action": "unmute", "volume": volume})
 
     def set_lang(self, value: Optional[str]) -> dict:
         if not value:
@@ -180,7 +161,10 @@ class PlaybackManager:
             raise invalid_argument("不支持的语种，请输入 华语/英语/日语/韩语/粤语 或简易英文")
         with self.lock:
             self.state.lang_preference = lang_key
-        return {"ok": True, "action": "lang", "lang": lang_key, "display": display_lang(lang_key)}
+        with self.lock:
+            return self._with_status(
+                {"ok": True, "action": "lang", "lang": lang_key, "display": display_lang(lang_key)}
+            )
 
     def _replace_queue(self, queue: Queue) -> None:
         self.state.queue = queue
@@ -206,6 +190,7 @@ class PlaybackManager:
         self.state.state = "playing"
         self.state.error_code = None
         self.state.message = None
+        self._persist_status_snapshot(self._status_payload())
         return track
 
     def _advance(self, step: int) -> Track:
@@ -228,10 +213,12 @@ class PlaybackManager:
                 return
             try:
                 self._advance(1)
+                self._persist_status_snapshot(self._status_payload())
             except Exception:
                 self.state.state = "error"
                 self.state.error_code = "SOURCE_RESOLVE_FAILED"
                 self.state.message = "音源解析失败，请稍后重试"
+                self._persist_status_snapshot(self._status_payload())
 
     def _handle_track_end(self) -> None:
         with self.lock:
@@ -241,17 +228,20 @@ class PlaybackManager:
             self._last_time_pos = 0.0
             try:
                 self._advance(1)
+                self._persist_status_snapshot(self._status_payload())
             except Exception:
                 self.state.state = "error"
                 self.state.error_code = "SOURCE_RESOLVE_FAILED"
                 self.state.message = "自动切歌失败，请稍后重试"
+                self._persist_status_snapshot(self._status_payload())
 
     def _play_response(self, action: str, query: str) -> dict:
         next_track = None
         if self.state.queue and self.state.queue.items and self.state.queue.current_index:
             next_index = self.state.queue.current_index % len(self.state.queue.items)
             next_track = self.state.queue.items[next_index].to_dict()
-        return {
+        return self._with_status(
+            {
             "ok": True,
             "action": action,
             "query": query,
@@ -261,7 +251,49 @@ class PlaybackManager:
             "lang": self.state.queue.lang if self.state.queue else self.state.lang_preference,
             "track": self.state.current_track.to_dict() if self.state.current_track else None,
             "next_track": next_track,
+            }
+        )
+
+    def _status_payload(self) -> dict:
+        queue_total = self.state.queue.total if self.state.queue else 0
+        queue_index = self.state.queue.current_index if self.state.queue else None
+        next_track = None
+        elapsed_sec = None
+        duration_sec = None
+        if self.state.queue and self.state.queue.items and queue_index:
+            next_index = queue_index % len(self.state.queue.items)
+            next_track = self.state.queue.items[next_index].to_dict()
+        if self.state.state in {"playing", "paused"} and self.state.current_track:
+            elapsed_sec = self.player.get_property("time-pos", 0) or 0
+            duration_sec = self.player.get_property("duration", self.state.current_track.duration_sec)
+        return {
+            "state": self.state.state,
+            "volume": self.state.volume,
+            "muted": self.state.muted,
+            "queue_total": queue_total,
+            "queue_index": queue_index,
+            "loop": True,
+            "lang": self.state.lang_preference,
+            "track": self.state.current_track.to_dict() if self.state.current_track else None,
+            "next_track": next_track,
+            "elapsed_sec": elapsed_sec,
+            "duration_sec": duration_sec,
+            "error_code": self.state.error_code,
+            "message": self.state.message,
         }
+
+    def _with_status(self, payload: dict) -> dict:
+        snapshot = self._status_payload()
+        self._persist_status_snapshot(snapshot)
+        payload["status_snapshot"] = snapshot
+        return payload
+
+    def _persist_status_snapshot(self, payload: dict) -> None:
+        ensure_runtime_dir()
+        STATUS_JSON_PATH.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
     def _monitor_loop(self) -> None:
         while True:

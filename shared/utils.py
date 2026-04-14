@@ -23,6 +23,7 @@ NOISE_WORDS = {
 NEGATIVE_TERMS = {
     "教学",
     "教程",
+    "翻唱",
     "reaction",
     "react",
     "vlog",
@@ -34,6 +35,8 @@ NEGATIVE_TERMS = {
     "cover lesson",
     "guitar tutorial",
     "piano tutorial",
+    "karaoke",
+    "instrumental",
 }
 
 
@@ -106,4 +109,3 @@ def recv_json_line(sock: socket.socket) -> dict:
 
 def shell_join(parts: Iterable[str]) -> str:
     return " ".join(shlex.quote(part) for part in parts)
-
