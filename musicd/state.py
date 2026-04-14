@@ -247,6 +247,10 @@ class PlaybackManager:
                 self.state.message = "自动切歌失败，请稍后重试"
 
     def _play_response(self, action: str, query: str) -> dict:
+        next_track = None
+        if self.state.queue and self.state.queue.items and self.state.queue.current_index:
+            next_index = self.state.queue.current_index % len(self.state.queue.items)
+            next_track = self.state.queue.items[next_index].to_dict()
         return {
             "ok": True,
             "action": action,
@@ -256,6 +260,7 @@ class PlaybackManager:
             "loop": True,
             "lang": self.state.queue.lang if self.state.queue else self.state.lang_preference,
             "track": self.state.current_track.to_dict() if self.state.current_track else None,
+            "next_track": next_track,
         }
 
     def _monitor_loop(self) -> None:

@@ -17,11 +17,21 @@ def format_response(response: dict) -> str:
         return response.get("message") or "请求失败"
     if action == "play":
         track = response.get("track") or {}
-        return f"已开始播放“{response.get('query', '')}”相关队列，共 {response.get('queue_total', 0)} 首，当前：{track.get('artist', '未知歌手')} - {track.get('title', '未知歌曲')}"
+        next_track = response.get("next_track") or {}
+        return (
+            f"已开始播放“{response.get('query', '')}”相关队列，共 {response.get('queue_total', 0)} 首"
+            f"，当前：{track.get('artist', '未知歌手')} - {track.get('title', '未知歌曲')}"
+            f"，下一首：{next_track.get('artist', '未知歌手')} - {next_track.get('title', '未知歌曲')}"
+        )
     if action == "hot":
         track = response.get("track") or {}
+        next_track = response.get("next_track") or {}
         lang = response.get("lang")
-        return f"已开始播放{display_lang(lang)}热门歌曲队列，共 {response.get('queue_total', 0)} 首，当前：{track.get('artist', '未知歌手')} - {track.get('title', '未知歌曲')}"
+        return (
+            f"已开始播放{display_lang(lang)}热门歌曲队列，共 {response.get('queue_total', 0)} 首"
+            f"，当前：{track.get('artist', '未知歌手')} - {track.get('title', '未知歌曲')}"
+            f"，下一首：{next_track.get('artist', '未知歌手')} - {next_track.get('title', '未知歌曲')}"
+        )
     if action == "pause":
         return "已暂停播放"
     if action == "resume":

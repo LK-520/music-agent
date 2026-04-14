@@ -27,4 +27,3 @@ description: 在本机后台播放网络音乐并控制播放状态。适用于 
 - `/music lang 粤语` -> `musicctl --text lang 粤语`
 
 直接返回命令输出，不打开浏览器，不弹窗。
-

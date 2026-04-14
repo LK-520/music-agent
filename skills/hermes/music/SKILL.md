@@ -17,13 +17,13 @@ platform_compatibility:
 - 如果用户输入的是 `/music keyword <关键词>`，执行：
 
 ```bash
-musicctl --text --follow play "<关键词>"
+musicctl --text play "<关键词>"
 ```
 
 - 如果用户输入的是 `/music hot` 或 `/music hot <lang>`，执行：
 
 ```bash
-musicctl --text --follow hot [lang]
+musicctl --text hot [lang]
 ```
 
 - 其他控制命令直接映射：
