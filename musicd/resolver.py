@@ -158,10 +158,16 @@ class Resolver:
             score += 0.9
         elif first_token and first_token in artist:
             score += 0.35
+        elif len(tokens) >= 2:
+            score -= 0.8
+        if any(char.isdigit() for char in (track.artist or "")) and first_token and first_token not in artist:
+            score -= 0.45
         if last_token and title == last_token:
             score += 1.0
         elif last_token and (title.startswith(last_token) or title.endswith(last_token)):
             score += 0.45
+        elif len(tokens) >= 2:
+            score -= 1.1
         if track.duration_sec is not None:
             if 120 <= track.duration_sec <= 360:
                 score += 0.2
@@ -188,6 +194,9 @@ class Resolver:
             "remix": 0.3,
             "cover": 0.35,
             "翻唱": 0.45,
+            "ai": 0.35,
+            "ai周杰倫": 0.7,
+            "ai周杰伦": 0.7,
             "歌词": 0.12,
             "lyric": 0.12,
             "合集": 0.4,
@@ -198,6 +207,8 @@ class Resolver:
             "instrumental": 0.55,
             "inst": 0.5,
             "纯音乐": 0.55,
+            "新專輯": 0.25,
+            "新专辑": 0.25,
             "片段": 0.25,
             "剪辑": 0.25,
             "dj": 0.2,

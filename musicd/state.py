@@ -176,22 +176,30 @@ class PlaybackManager:
         if not queue or not queue.items or not queue.current_index:
             raise MusicError("QUEUE_EMPTY", "当前没有正在播放的音乐")
         track = queue.items[queue.current_index - 1]
-        if not track.stream_url or not track.resolved_at or time.time() - track.resolved_at > 900:
-            track = self.resolver.refresh_stream(track)
-            queue.items[queue.current_index - 1] = track
-        self.player.load(track.stream_url)
-        if self.state.muted:
-            self.player.set_volume(0)
-        else:
-            self.player.set_volume(self.state.volume)
-        self.player.set_pause(False)
-        self._last_time_pos = 0.0
-        self.state.current_track = track
-        self.state.state = "playing"
-        self.state.error_code = None
-        self.state.message = None
-        self._persist_status_snapshot(self._status_payload())
-        return track
+        for attempt in range(2):
+            if (
+                attempt > 0
+                or not track.stream_url
+                or not track.resolved_at
+                or time.time() - track.resolved_at > 900
+            ):
+                track = self.resolver.refresh_stream(track)
+                queue.items[queue.current_index - 1] = track
+            self.player.load(track.stream_url)
+            if self.state.muted:
+                self.player.set_volume(0)
+            else:
+                self.player.set_volume(self.state.volume)
+            self.player.set_pause(False)
+            if self._wait_for_track_start():
+                self._last_time_pos = 0.0
+                self.state.current_track = track
+                self.state.state = "playing"
+                self.state.error_code = None
+                self.state.message = None
+                self._persist_status_snapshot(self._status_payload())
+                return track
+        raise MusicError("SOURCE_RESOLVE_FAILED", "当前歌曲无法正常播放，已尝试重新解析音源")
 
     def _advance(self, step: int) -> Track:
         queue = self.state.queue
@@ -319,3 +327,11 @@ class PlaybackManager:
                     self.state.state = "error"
                     self.state.error_code = exc.code
                     self.state.message = exc.message
+
+    def _wait_for_track_start(self, timeout_sec: float = 4.0) -> bool:
+        deadline = time.time() + timeout_sec
+        while time.time() < deadline:
+            if not self.player.is_idle():
+                return True
+            time.sleep(0.2)
+        return False
