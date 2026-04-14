@@ -220,6 +220,14 @@ music-agent/
 - This project does not build a local music library
 - This project does not provide a GUI
 
+## Disclaimer
+
+- `music-agent` is a local control tool and does not provide any music catalog, account service, or hosted streaming service.
+- Playback availability depends on third-party platforms such as YouTube, Bilibili, SoundCloud, and KKBOX. Upstream changes, regional restrictions, takedowns, or API behavior changes may affect results at any time.
+- Users are responsible for complying with the terms of service, copyright rules, and local laws that apply to the music sources they access through this project.
+- This project is intended for personal, lawful use. Do not use it to redistribute copyrighted audio, bypass platform restrictions, or build unlicensed commercial music services.
+- The maintainers of this repository do not own the copyrights to third-party audio, artwork, charts, or metadata referenced by external sources.
+
 ## Development
 
 ### Run Tests
@@ -246,4 +254,3 @@ musicctl --text hot english
 ## License
 
 This project is licensed under the [MIT License](./LICENSE).
-
