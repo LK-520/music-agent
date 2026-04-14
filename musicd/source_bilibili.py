@@ -6,6 +6,7 @@ from urllib.parse import quote
 from typing import List
 
 from musicd.source_base import SourceAdapter
+from shared.environment import get_yt_dlp_command
 from shared.models import Track
 from shared.utils import clean_artist_name, duration_to_seconds, run_subprocess
 
@@ -66,10 +67,10 @@ class BilibiliAdapter(SourceAdapter):
         return tracks
 
     def resolve_stream(self, track: Track) -> str:
-        command = [
-            "python3",
-            "-m",
-            "yt_dlp",
+        base_command = get_yt_dlp_command()
+        if not base_command:
+            raise RuntimeError("yt-dlp unavailable")
+        command = base_command + [
             "-f",
             "bestaudio/best",
             "--no-playlist",

@@ -4,9 +4,17 @@ from shared.lang import display_lang
 
 
 def format_response(response: dict) -> str:
+    action = response.get("action")
+    if action == "doctor":
+        lines = ["环境检查结果："]
+        for item in response.get("checks", []):
+            prefix = "OK" if item.get("ok") else "FAIL"
+            lines.append(f"{prefix} {item.get('message')}")
+        for note in response.get("fix_notes", []):
+            lines.append(f"INFO {note}")
+        return "\n".join(lines)
     if not response.get("ok"):
         return response.get("message") or "请求失败"
-    action = response.get("action")
     if action == "play":
         track = response.get("track") or {}
         return f"已开始播放“{response.get('query', '')}”相关队列，共 {response.get('queue_total', 0)} 首，当前：{track.get('artist', '未知歌手')} - {track.get('title', '未知歌曲')}"
@@ -56,4 +64,3 @@ def format_response(response: dict) -> str:
     if action == "lang":
         return f"当前热榜语种：{response.get('display')}"
     return "操作成功"
-

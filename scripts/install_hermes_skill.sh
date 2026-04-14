@@ -21,3 +21,7 @@ chmod +x "$BIN_PATH"
 
 echo "Hermes music skill installed to: $TARGET_DIR"
 echo "musicctl wrapper installed to: $BIN_PATH"
+
+echo
+echo "Running environment check..."
+"$BIN_PATH" --text doctor --fix || true
