@@ -78,6 +78,8 @@ def _path_has_local_bin() -> bool:
 def collect_environment_report() -> dict:
     mpv_path = get_mpv_path()
     yt_dlp_command = get_yt_dlp_command()
+    musicd_pids = get_musicd_pids()
+    mpv_pids = get_musicd_mpv_pids()
     checks = [
         {
             "key": "mpv",
@@ -102,6 +104,16 @@ def collect_environment_report() -> dict:
                 else "PATH 未包含 ~/.local/bin，终端里可能找不到 musicctl"
             ),
         },
+        {
+            "key": "musicd_processes",
+            "ok": len(musicd_pids) <= 1,
+            "message": f"musicd 进程数：{len(musicd_pids)}",
+        },
+        {
+            "key": "mpv_processes",
+            "ok": len(mpv_pids) <= 1,
+            "message": f"music-agent 管理的 mpv 进程数：{len(mpv_pids)}",
+        },
     ]
     blocking_issues = [
         check["message"]
@@ -120,6 +132,8 @@ def collect_environment_report() -> dict:
         "warnings": warnings,
         "mpv_path": mpv_path,
         "yt_dlp_command": yt_dlp_command,
+        "musicd_pids": musicd_pids,
+        "mpv_pids": mpv_pids,
     }
 
 
@@ -171,5 +185,90 @@ def attempt_environment_fix() -> list[str]:
         notes.append(_try_install_yt_dlp())
     if not get_mpv_path():
         notes.append(_try_install_mpv())
+    duplicate_notes = cleanup_duplicate_runtime_processes()
+    notes.extend(duplicate_notes)
     return notes
 
+
+def _read_pid(path: Path) -> Optional[int]:
+    try:
+        return int(path.read_text(encoding="utf-8").strip())
+    except Exception:
+        return None
+
+
+def _pgrep(pattern: str) -> List[int]:
+    result = run_subprocess(["pgrep", "-f", pattern], timeout=10)
+    if result.returncode != 0 or not result.stdout.strip():
+        return []
+    values: List[int] = []
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if line.isdigit():
+            values.append(int(line))
+    return values
+
+
+def _kill_pids(pids: List[int]) -> None:
+    if not pids:
+        return
+    run_subprocess(["kill", "-TERM", *[str(pid) for pid in pids]], timeout=10)
+    import time
+    time.sleep(0.4)
+    survivors = [pid for pid in pids if _pid_alive(pid)]
+    if survivors:
+        run_subprocess(["kill", "-KILL", *[str(pid) for pid in survivors]], timeout=10)
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def get_musicd_pids() -> List[int]:
+    return _pgrep(r"musicd\.daemon --serve")
+
+
+def get_musicd_mpv_pids() -> List[int]:
+    socket_path = str(Path.home() / ".cache" / "music-agent" / "mpv.sock")
+    return _pgrep(rf"mpv .*--input-ipc-server={socket_path}")
+
+
+def cleanup_duplicate_runtime_processes() -> List[str]:
+    notes: List[str] = []
+    current_musicd = _read_pid(Path.home() / ".cache" / "music-agent" / "musicd.pid")
+    current_mpv = _read_pid(Path.home() / ".cache" / "music-agent" / "mpv.pid")
+    extra_musicd = [pid for pid in get_musicd_pids() if pid != current_musicd]
+    extra_mpv = [pid for pid in get_musicd_mpv_pids() if pid != current_mpv]
+    if extra_musicd:
+        _kill_pids(extra_musicd)
+        notes.append(f"已清理多余 musicd 进程：{', '.join(str(pid) for pid in extra_musicd)}")
+    if extra_mpv:
+        _kill_pids(extra_mpv)
+        notes.append(f"已清理多余 mpv 进程：{', '.join(str(pid) for pid in extra_mpv)}")
+    return notes
+
+
+def cleanup_all_runtime_processes() -> list[str]:
+    notes: List[str] = []
+    musicd = get_musicd_pids()
+    mpv = get_musicd_mpv_pids()
+    if musicd:
+        _kill_pids(musicd)
+        notes.append(f"已停止 musicd：{', '.join(str(pid) for pid in musicd)}")
+    if mpv:
+        _kill_pids(mpv)
+        notes.append(f"已停止 mpv：{', '.join(str(pid) for pid in mpv)}")
+    for path in [
+        Path.home() / ".cache" / "music-agent" / "musicd.sock",
+        Path.home() / ".cache" / "music-agent" / "musicd.pid",
+        Path.home() / ".cache" / "music-agent" / "mpv.sock",
+        Path.home() / ".cache" / "music-agent" / "mpv.pid",
+        Path.home() / ".cache" / "music-agent" / "musicd.lock",
+    ]:
+        if path.exists():
+            path.unlink()
+    return notes

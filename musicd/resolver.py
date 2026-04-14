@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 from typing import Dict, Iterable, List, Sequence, Tuple
 
@@ -80,24 +81,42 @@ class Resolver:
 
     def _search_keyword_tracks(self, query: str, limit: int) -> List[Track]:
         all_candidates: List[Track] = []
-        for source_name in ("youtube", "bilibili", "soundcloud"):
-            raw_tracks = self.adapters[source_name].search(query, 50)
-            filtered = [track for track in raw_tracks if self._is_track_allowed(track)]
-            scored = [self._score_track(track, query) for track in filtered]
-            all_candidates.extend(scored)
+        search_limit = max(limit * 2, 20)
+        source_names = ("youtube", "bilibili", "soundcloud")
+        with ThreadPoolExecutor(max_workers=len(source_names)) as executor:
+            future_map = {
+                executor.submit(self.adapters[source_name].search, query, search_limit): source_name
+                for source_name in source_names
+            }
+            for future in as_completed(future_map):
+                try:
+                    raw_tracks = future.result() or []
+                except Exception:
+                    continue
+                filtered = [track for track in raw_tracks if self._is_track_allowed(track)]
+                scored = [self._score_track(track, query) for track in filtered]
+                all_candidates.extend(scored)
         deduped = self._dedupe(all_candidates)
         ranked = sorted(deduped, key=lambda item: item.rank_score, reverse=True)
         return ranked[:limit]
 
     def _resolve_tracks(self, tracks: Sequence[Track]) -> List[Track]:
-        resolved: List[Track] = []
-        for track in tracks:
-            try:
-                resolved_track = self.refresh_stream(track)
-            except Exception:
-                continue
-            resolved.append(resolved_track)
-        return resolved
+        if not tracks:
+            return []
+        resolved_by_index: Dict[int, Track] = {}
+        max_workers = min(6, len(tracks))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_map = {
+                executor.submit(self.refresh_stream, track): index
+                for index, track in enumerate(tracks)
+            }
+            for future in as_completed(future_map):
+                index = future_map[future]
+                try:
+                    resolved_by_index[index] = future.result()
+                except Exception:
+                    continue
+        return [resolved_by_index[index] for index in sorted(resolved_by_index)]
 
     def _is_track_allowed(self, track: Track) -> bool:
         title = track.title or ""

@@ -21,7 +21,7 @@ class YouTubeAdapter(SourceAdapter):
             "--dump-single-json",
             f"ytsearch{limit}:{query}",
         ]
-        result = run_subprocess(command, timeout=120)
+        result = run_subprocess(command, timeout=40)
         if result.returncode != 0 or not result.stdout.strip():
             return []
         payload = json.loads(result.stdout)
@@ -55,7 +55,7 @@ class YouTubeAdapter(SourceAdapter):
             "-J",
             track.page_url,
         ]
-        result = run_subprocess(command, timeout=120)
+        result = run_subprocess(command, timeout=45)
         if result.returncode != 0 or not result.stdout.strip():
             raise RuntimeError(result.stderr.strip() or "youtube resolve failed")
         payload = json.loads(result.stdout)

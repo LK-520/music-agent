@@ -8,6 +8,7 @@ SOCKET_PATH = APP_DIR / "musicd.sock"
 PID_PATH = APP_DIR / "musicd.pid"
 LOG_PATH = APP_DIR / "musicd.log"
 MPV_SOCKET_PATH = APP_DIR / "mpv.sock"
+MPV_PID_PATH = APP_DIR / "mpv.pid"
 LOCK_PATH = APP_DIR / "musicd.lock"
 
 

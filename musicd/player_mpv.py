@@ -10,23 +10,60 @@ from pathlib import Path
 from typing import Any, Optional
 
 from shared.errors import MusicError
-from shared.runtime import MPV_SOCKET_PATH, ensure_runtime_dir
+from shared.runtime import MPV_PID_PATH, MPV_SOCKET_PATH, ensure_runtime_dir
+from shared.utils import run_subprocess
 
 
 class MpvPlayer:
     def __init__(self) -> None:
         self.process: Optional[subprocess.Popen] = None
 
-    def ensure_started(self) -> None:
-        if shutil.which("mpv") is None:
-            raise MusicError("PLAYER_UNAVAILABLE", "未检测到 mpv，请先安装 mpv")
-        ensure_runtime_dir()
-        if self.process and self.process.poll() is None and MPV_SOCKET_PATH.exists():
-            return
+    def _mpv_path(self) -> Optional[str]:
+        for candidate in [shutil.which("mpv"), "/usr/local/bin/mpv", "/opt/homebrew/bin/mpv"]:
+            if candidate and Path(candidate).exists():
+                return candidate
+        return None
+
+    def _process_alive(self, pid: int) -> bool:
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
+
+    def _cleanup_orphan_mpv(self) -> None:
+        if MPV_PID_PATH.exists():
+            try:
+                pid = int(MPV_PID_PATH.read_text(encoding="utf-8").strip())
+                if self._process_alive(pid):
+                    run_subprocess(["kill", "-TERM", str(pid)], timeout=10)
+                    time.sleep(0.2)
+                MPV_PID_PATH.unlink(missing_ok=True)
+            except Exception:
+                MPV_PID_PATH.unlink(missing_ok=True)
+        socket_path = str(MPV_SOCKET_PATH)
+        run_subprocess(["pkill", "-f", f"--input-ipc-server={socket_path}"], timeout=10)
         if MPV_SOCKET_PATH.exists():
             MPV_SOCKET_PATH.unlink()
+
+    def ensure_started(self) -> None:
+        mpv_path = self._mpv_path()
+        if mpv_path is None:
+            raise MusicError("PLAYER_UNAVAILABLE", "未检测到 mpv，请先安装 mpv")
+        ensure_runtime_dir()
+        if MPV_PID_PATH.exists():
+            try:
+                pid = int(MPV_PID_PATH.read_text(encoding="utf-8").strip())
+                if self._process_alive(pid) and MPV_SOCKET_PATH.exists():
+                    return
+            except Exception:
+                pass
+        if self.process and self.process.poll() is None and MPV_SOCKET_PATH.exists():
+            MPV_PID_PATH.write_text(str(self.process.pid), encoding="utf-8")
+            return
+        self._cleanup_orphan_mpv()
         command = [
-            "mpv",
+            mpv_path,
             "--idle=yes",
             "--no-video",
             "--force-window=no",
@@ -41,6 +78,7 @@ class MpvPlayer:
             stdin=subprocess.DEVNULL,
             start_new_session=True,
         )
+        MPV_PID_PATH.write_text(str(self.process.pid), encoding="utf-8")
         deadline = time.time() + 10
         while time.time() < deadline:
             if MPV_SOCKET_PATH.exists():
@@ -74,6 +112,23 @@ class MpvPlayer:
     def stop(self) -> None:
         self._send(["stop"])
 
+    def quit(self) -> None:
+        if MPV_SOCKET_PATH.exists():
+            try:
+                self._send(["quit"])
+            except Exception:
+                pass
+        if MPV_PID_PATH.exists():
+            try:
+                pid = int(MPV_PID_PATH.read_text(encoding="utf-8").strip())
+                if self._process_alive(pid):
+                    run_subprocess(["kill", "-TERM", str(pid)], timeout=10)
+            except Exception:
+                pass
+        MPV_PID_PATH.unlink(missing_ok=True)
+        if MPV_SOCKET_PATH.exists():
+            MPV_SOCKET_PATH.unlink()
+
     def set_pause(self, value: bool) -> None:
         self._send(["set_property", "pause", value])
 
@@ -88,4 +143,3 @@ class MpvPlayer:
 
     def is_idle(self) -> bool:
         return bool(self.get_property("idle-active", True))
-

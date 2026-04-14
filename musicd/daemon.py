@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import json
 import os
 import signal
 import socketserver
 import sys
+import threading
 from pathlib import Path
 from subprocess import Popen
 from time import sleep, time
@@ -17,6 +19,7 @@ from shared.utils import json_dumps
 
 
 MANAGER = PlaybackManager()
+SERVER: ThreadedUnixServer | None = None
 
 
 class RequestHandler(socketserver.StreamRequestHandler):
@@ -25,7 +28,7 @@ class RequestHandler(socketserver.StreamRequestHandler):
         if not raw:
             return
         try:
-            payload = __import__("json").loads(raw)
+            payload = json.loads(raw)
             response = dispatch(payload)
         except MusicError as exc:
             response = exc.to_dict()
@@ -35,7 +38,12 @@ class RequestHandler(socketserver.StreamRequestHandler):
                 "error_code": "INTERNAL_ERROR",
                 "message": str(exc) or "内部错误",
             }
-        self.wfile.write(json_dumps(response))
+        try:
+            self.wfile.write(json_dumps(response))
+        except BrokenPipeError:
+            # The CLI may have been interrupted while the server was still
+            # preparing the queue. Treat that as a normal detached client.
+            return
 
 
 class ThreadedUnixServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
@@ -58,6 +66,11 @@ def dispatch(payload: dict) -> dict:
         return MANAGER.prev_track()
     if action == "stop":
         return MANAGER.stop()
+    if action == "shutdown":
+        response = MANAGER.shutdown()
+        if SERVER is not None:
+            threading.Thread(target=SERVER.shutdown, daemon=True).start()
+        return response
     if action == "status":
         return MANAGER.status()
     if action == "volume":
@@ -76,13 +89,21 @@ def dispatch(payload: dict) -> dict:
 
 
 def run_server() -> None:
+    global SERVER
     ensure_runtime_dir()
     if SOCKET_PATH.exists():
         SOCKET_PATH.unlink()
     PID_PATH.write_text(str(os.getpid()), encoding="utf-8")
     MANAGER.start_monitor()
-    with ThreadedUnixServer(str(SOCKET_PATH), RequestHandler) as server:
-        server.serve_forever()
+    try:
+        with ThreadedUnixServer(str(SOCKET_PATH), RequestHandler) as server:
+            SERVER = server
+            server.serve_forever()
+    finally:
+        SERVER = None
+        PID_PATH.unlink(missing_ok=True)
+        if SOCKET_PATH.exists():
+            SOCKET_PATH.unlink()
 
 
 def daemonize() -> None:

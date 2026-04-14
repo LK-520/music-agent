@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
+import signal
 import sys
+import time
 from typing import Optional
 
 from musicd.daemon import daemonize
@@ -11,6 +14,7 @@ from musicctl.formatter import format_response
 from shared.environment import (
     EnvironmentIssue,
     attempt_environment_fix,
+    cleanup_all_runtime_processes,
     collect_environment_report,
     ensure_playback_environment,
 )
@@ -33,6 +37,7 @@ def ensure_daemon() -> None:
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="musicctl")
     parser.add_argument("--text", action="store_true", help="输出中文文本而不是 JSON")
+    parser.add_argument("--follow", action="store_true", help="持续显示播放状态，退出时停止音乐服务")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     play_parser = subparsers.add_parser("play")
@@ -49,6 +54,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     subparsers.add_parser("status")
     subparsers.add_parser("mute")
     subparsers.add_parser("unmute")
+    subparsers.add_parser("cleanup")
     doctor_parser = subparsers.add_parser("doctor")
     doctor_parser.add_argument("--fix", action="store_true")
 
@@ -85,6 +91,8 @@ def build_payload(args: argparse.Namespace) -> dict:
         return {"action": "unmute"}
     if command == "doctor":
         return {"action": "doctor", "fix": args.fix}
+    if command == "cleanup":
+        return {"action": "cleanup"}
     if command == "lang":
         return {"action": "lang", "value": args.value}
     if command == "volume":
@@ -114,6 +122,19 @@ def main(argv: Optional[list[str]] = None) -> int:
         else:
             print(json.dumps(response, ensure_ascii=False))
         return 0 if response.get("ok") else 1
+    if args.command == "cleanup":
+        notes = cleanup_all_runtime_processes()
+        response = {
+            "ok": True,
+            "action": "doctor",
+            "checks": [],
+            "fix_notes": notes or ["当前没有可清理的 musicd/mpv 进程"],
+        }
+        if args.text:
+            print(format_response(response))
+        else:
+            print(json.dumps(response, ensure_ascii=False))
+        return 0
     if args.command in {"play", "hot"}:
         try:
             ensure_playback_environment()
@@ -129,12 +150,109 @@ def main(argv: Optional[list[str]] = None) -> int:
                 print(json.dumps(response, ensure_ascii=False))
             return 1
     ensure_daemon()
-    response = send_request(build_payload(args))
+    timeout = 300 if args.command in {"play", "hot"} else 20
+    if args.text and args.follow and args.command in {"play", "hot"}:
+        print("正在准备播放队列，请稍候...")
+    try:
+        response = send_request(build_payload(args), timeout=timeout)
+    except KeyboardInterrupt:
+        return _handle_interrupted_startup(args)
+    except TimeoutError:
+        return _handle_startup_timeout(args)
     if args.text:
         print(format_response(response))
     else:
         print(json.dumps(response, ensure_ascii=False))
+    if response.get("ok") and args.follow and args.command in {"play", "hot"}:
+        return follow_playback(text_mode=args.text)
     return 0 if response.get("ok") else 1
+
+
+def _render_simple_message(args: argparse.Namespace, message: str) -> int:
+    if args.text:
+        print(message)
+    else:
+        print(json.dumps({"ok": False, "message": message}, ensure_ascii=False))
+    return 1
+
+
+def _handle_interrupted_startup(args: argparse.Namespace) -> int:
+    if args.command in {"play", "hot"}:
+        cleanup_all_runtime_processes()
+        return _render_simple_message(args, "已取消本次播放，并清理后台音乐进程。")
+    return _render_simple_message(args, "操作已取消")
+
+
+def _handle_startup_timeout(args: argparse.Namespace) -> int:
+    if args.command in {"play", "hot"}:
+        cleanup_all_runtime_processes()
+        return _render_simple_message(args, "准备播放队列超时，已自动清理后台音乐进程，请重试。")
+    return _render_simple_message(args, "请求超时，请重试。")
+
+
+def _format_seconds(value: Optional[float]) -> str:
+    if value is None:
+        return "--:--"
+    total = max(0, int(value))
+    return f"{total // 60:02d}:{total % 60:02d}"
+
+
+def _print_follow_status(response: dict, previous_signature: Optional[str]) -> str:
+    track = response.get("track") or {}
+    next_track = response.get("next_track") or {}
+    signature = "|".join(
+        [
+            response.get("state", ""),
+            track.get("title", ""),
+            track.get("artist", ""),
+            next_track.get("title", ""),
+            str(response.get("queue_index")),
+            str(int(response.get("elapsed_sec") or 0)),
+        ]
+    )
+    if signature == previous_signature:
+        return previous_signature or ""
+    if response.get("state") == "idle":
+        print("播放已结束，当前没有活动队列。")
+        return signature
+    current = f"{track.get('artist', '未知歌手')} - {track.get('title', '未知歌曲')}"
+    upcoming = f"{next_track.get('artist', '未知歌手')} - {next_track.get('title', '未知歌曲')}" if next_track else "无"
+    progress = f"{_format_seconds(response.get('elapsed_sec'))}/{_format_seconds(response.get('duration_sec'))}"
+    print(
+        f"当前播放：{current}｜下一首：{upcoming}｜进度：{progress}｜队列：{response.get('queue_index')}/{response.get('queue_total')}"
+    )
+    return signature
+
+
+def follow_playback(text_mode: bool) -> int:
+    stopped = {"done": False}
+
+    def cleanup() -> None:
+        if stopped["done"]:
+            return
+        stopped["done"] = True
+        try:
+            send_request({"action": "stop"}, timeout=5)
+        except Exception:
+            pass
+        try:
+            send_request({"action": "shutdown"}, timeout=5)
+        except Exception:
+            pass
+
+    atexit.register(cleanup)
+    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, lambda *_args: (_ for _ in ()).throw(KeyboardInterrupt()))
+    previous_signature: Optional[str] = None
+    try:
+        while True:
+            status = send_request({"action": "status"}, timeout=5)
+            previous_signature = _print_follow_status(status, previous_signature)
+            time.sleep(2)
+    except KeyboardInterrupt:
+        print("已退出播放会话，正在关闭音乐服务。")
+        cleanup()
+        return 0
 
 
 if __name__ == "__main__":

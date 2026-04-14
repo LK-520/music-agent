@@ -86,10 +86,36 @@ class PlaybackManager:
             self.state.message = None
             return {"ok": True, "action": "stop"}
 
+    def shutdown(self) -> dict:
+        with self.lock:
+            try:
+                self.player.stop()
+            except Exception:
+                pass
+            try:
+                self.player.quit()
+            except Exception:
+                pass
+            self.state.queue = None
+            self.state.current_track = None
+            self.state.state = "idle"
+            self.state.error_code = None
+            self.state.message = None
+            return {"ok": True, "action": "shutdown"}
+
     def status(self) -> dict:
         with self.lock:
             queue_total = self.state.queue.total if self.state.queue else 0
             queue_index = self.state.queue.current_index if self.state.queue else None
+            next_track = None
+            elapsed_sec = None
+            duration_sec = None
+            if self.state.queue and self.state.queue.items and queue_index:
+                next_index = (queue_index % len(self.state.queue.items))
+                next_track = self.state.queue.items[next_index].to_dict()
+            if self.state.state in {"playing", "paused"} and self.state.current_track:
+                elapsed_sec = self.player.get_property("time-pos", 0) or 0
+                duration_sec = self.player.get_property("duration", self.state.current_track.duration_sec)
             return {
                 "ok": True,
                 "action": "status",
@@ -101,6 +127,9 @@ class PlaybackManager:
                 "loop": True,
                 "lang": self.state.lang_preference,
                 "track": self.state.current_track.to_dict() if self.state.current_track else None,
+                "next_track": next_track,
+                "elapsed_sec": elapsed_sec,
+                "duration_sec": duration_sec,
                 "error_code": self.state.error_code,
                 "message": self.state.message,
             }

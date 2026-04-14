@@ -41,12 +41,14 @@ def format_response(response: dict) -> str:
         if response.get("state") == "error":
             return response.get("message") or "音乐服务异常"
         track = response.get("track") or {}
+        next_track = response.get("next_track") or {}
         state_map = {"playing": "播放中", "paused": "已暂停"}
         queue_index = response.get("queue_index") or "-"
         queue_total = response.get("queue_total") or "-"
         muted = "是" if response.get("muted") else "否"
         return (
             f"当前播放：{track.get('artist', '未知歌手')} - {track.get('title', '未知歌曲')}"
+            f"｜下一首：{next_track.get('artist', '未知歌手')} - {next_track.get('title', '未知歌曲')}"
             f"｜状态：{state_map.get(response.get('state'), response.get('state'))}"
             f"｜音量：{response.get('volume', 0)}"
             f"｜静音：{muted}"

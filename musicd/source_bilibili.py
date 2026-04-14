@@ -77,7 +77,7 @@ class BilibiliAdapter(SourceAdapter):
             "-J",
             track.page_url,
         ]
-        result = run_subprocess(command, timeout=120)
+        result = run_subprocess(command, timeout=45)
         if result.returncode != 0 or not result.stdout.strip():
             raise RuntimeError(result.stderr.strip() or "bilibili resolve failed")
         payload = json.loads(result.stdout)
