@@ -185,7 +185,7 @@ class PlaybackManager:
             ):
                 track = self.resolver.refresh_stream(track)
                 queue.items[queue.current_index - 1] = track
-            self.player.load(track.stream_url)
+            self.player.load(track)
             if self.state.muted:
                 self.player.set_volume(0)
             else:

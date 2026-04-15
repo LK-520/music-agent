@@ -6,11 +6,14 @@ import shutil
 import socket
 import subprocess
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any, Optional
 
 from shared.errors import MusicError
-from shared.runtime import MPV_PID_PATH, MPV_SOCKET_PATH, ensure_runtime_dir
+from shared.models import Track
+from shared.runtime import CURRENT_ART_PATH, MPV_PID_PATH, MPV_SOCKET_PATH, ensure_runtime_dir
 from shared.utils import run_subprocess
 
 
@@ -104,16 +107,22 @@ class MpvPlayer:
         raw = b"".join(chunks).split(b"\n", 1)[0].decode("utf-8")
         return json.loads(raw) if raw else {}
 
-    def load(self, url: str) -> None:
-        response = self._send(["loadfile", url, "replace"])
+    def load(self, track: Track) -> None:
+        response = self._send(["loadfile", track.stream_url, "replace"])
         if response.get("error") not in (None, "success"):
             raise MusicError("PLAYER_UNAVAILABLE", "播放器加载失败")
+        self._apply_now_playing_metadata(track)
 
     def stop(self) -> None:
         self._send(["stop"])
+        self._clear_now_playing_metadata()
 
     def quit(self) -> None:
         if MPV_SOCKET_PATH.exists():
+            try:
+                self._clear_now_playing_metadata()
+            except Exception:
+                pass
             try:
                 self._send(["quit"])
             except Exception:
@@ -143,3 +152,37 @@ class MpvPlayer:
 
     def is_idle(self) -> bool:
         return bool(self.get_property("idle-active", True))
+
+    def _apply_now_playing_metadata(self, track: Track) -> None:
+        title = track.title or "未知歌曲"
+        artist = track.artist or "未知歌手"
+        display_title = f"{artist} - {title}"
+        self._send(["set_property", "force-media-title", display_title])
+        art_path = self._download_cover_art(track)
+        self._send(["set_property", "cover-art-files", [art_path] if art_path else []])
+
+    def _clear_now_playing_metadata(self) -> None:
+        try:
+            self._send(["set_property", "force-media-title", ""])
+        except Exception:
+            pass
+        try:
+            self._send(["set_property", "cover-art-files", []])
+        except Exception:
+            pass
+
+    def _download_cover_art(self, track: Track) -> Optional[str]:
+        if not track.thumbnail_url:
+            return None
+        ensure_runtime_dir()
+        suffix = Path(track.thumbnail_url.split("?", 1)[0]).suffix or ".jpg"
+        target = CURRENT_ART_PATH.with_suffix(suffix)
+        try:
+            with urllib.request.urlopen(track.thumbnail_url, timeout=10) as response:
+                target.write_bytes(response.read())
+            for other in target.parent.glob("current-cover.*"):
+                if other != target:
+                    other.unlink(missing_ok=True)
+            return str(target)
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+            return None
