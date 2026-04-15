@@ -134,9 +134,17 @@ class Resolver:
         raw_title = (track.title or "").lower()
         title = normalize_title(track.title)
         artist = normalize_title(track.artist)
-        score = self.platform_weight.get(track.source, 0.0)
+        score = self.platform_weight.get(track.source, 0.0) + track.rank_score
         tokens = query_tokens(query)
         normalized_query = normalize_title(query)
+        if track.source == "youtube" and "music.youtube.com/" in (track.page_url or ""):
+            matched = sum(1 for token in tokens if token in title or token in artist)
+            if tokens:
+                score += 0.15 * (matched / len(tokens))
+            if len(tokens) >= 2 and not any(token in title for token in tokens[1:]):
+                score -= 0.8
+            track.rank_score = round(score, 4)
+            return track
         if title == normalized_query:
             score += 0.9
         elif normalized_query and normalized_query in title:

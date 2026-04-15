@@ -103,6 +103,28 @@ class ResolverTests(unittest.TestCase):
         artist_score = resolver._score_track(artist_channel, "周杰倫 那天下雨了").rank_score
         self.assertGreater(artist_score, reup_score)
 
+    def test_youtube_music_default_order_is_preserved(self):
+        resolver = Resolver()
+        first = Track(
+            id="first",
+            title="后会无期",
+            artist="",
+            source="youtube",
+            page_url="https://music.youtube.com/watch?v=first",
+            rank_score=3.0,
+        )
+        second = Track(
+            id="second",
+            title="后会无期（Live）",
+            artist="",
+            source="youtube",
+            page_url="https://music.youtube.com/watch?v=second",
+            rank_score=2.0,
+        )
+        first_score = resolver._score_track(first, "后会无期").rank_score
+        second_score = resolver._score_track(second, "后会无期").rank_score
+        self.assertGreater(first_score, second_score)
+
 
 if __name__ == "__main__":
     unittest.main()

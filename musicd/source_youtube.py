@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from urllib.parse import quote
 from typing import List
 
 from musicd.source_base import SourceAdapter
@@ -16,32 +17,49 @@ class YouTubeAdapter(SourceAdapter):
         base_command = get_yt_dlp_command()
         if not base_command:
             return []
+        music_search_url = f"https://music.youtube.com/search?q={quote(query)}"
         command = base_command + [
             "--flat-playlist",
             "--dump-single-json",
-            f"ytsearch{limit}:{query}",
+            music_search_url,
         ]
         result = run_subprocess(command, timeout=40)
         if result.returncode != 0 or not result.stdout.strip():
-            return []
+            fallback_command = base_command + [
+                "--flat-playlist",
+                "--dump-single-json",
+                f"ytsearch{limit}:{query}",
+            ]
+            result = run_subprocess(fallback_command, timeout=40)
+            if result.returncode != 0 or not result.stdout.strip():
+                return []
         payload = json.loads(result.stdout)
         tracks: List[Track] = []
-        for entry in payload.get("entries", []):
+        for index, entry in enumerate(payload.get("entries", [])):
             if entry.get("ie_key") != "Youtube":
                 continue
             video_id = entry.get("id")
             if not video_id:
                 continue
+            title = entry.get("title") or ""
+            if not title.strip():
+                continue
+            url = entry.get("url") or f"https://www.youtube.com/watch?v={video_id}"
+            if "watch?v=" not in url:
+                continue
             tracks.append(
                 Track(
                     id=video_id,
-                    title=entry.get("title") or "",
+                    title=title,
                     artist=clean_artist_name(entry.get("channel") or entry.get("uploader") or ""),
                     source=self.source_name,
-                    page_url=entry.get("url") or f"https://www.youtube.com/watch?v={video_id}",
+                    page_url=url,
                     thumbnail_url=(entry.get("thumbnails") or [{}])[-1].get("url"),
+                    rank_score=max(0.0, 3.0 - (index * 0.05)),
                 )
             )
+            if len(tracks) >= limit:
+                break
         return tracks
 
     def resolve_stream(self, track: Track) -> str:
