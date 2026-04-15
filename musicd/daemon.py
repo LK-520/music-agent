@@ -85,6 +85,8 @@ def dispatch(payload: dict) -> dict:
         return MANAGER.unmute()
     if action == "lang":
         return MANAGER.set_lang(payload.get("value"))
+    if action == "source":
+        return MANAGER.set_source(payload.get("value"))
     raise MusicError("INVALID_ARGUMENT", f"不支持的命令：{action}")
 
 

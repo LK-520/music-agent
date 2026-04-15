@@ -136,6 +136,7 @@ musicctl --text hot
 musicctl --text hot english
 musicctl --text hot japanese
 musicctl --text lang cantonese
+musicctl --text source b
 musicctl --text hot
 ```
 
@@ -158,6 +159,22 @@ musicctl --text volume up
 musicctl --text volume down
 musicctl --text mute
 musicctl --text unmute
+```
+
+### 音源切换
+
+```bash
+musicctl --text source
+musicctl --text source y
+musicctl --text source b
+musicctl --text source s
+```
+
+### CLI 集成
+
+```bash
+musicctl --text state hermes
+musicctl --text state openclaw
 ```
 
 ## 支持的热榜语种

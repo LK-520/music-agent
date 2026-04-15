@@ -38,6 +38,7 @@ class Queue:
     current_index: Optional[int] = None
     total: int = 0
     lang: str = "mandarin"
+    source_preference: str = "youtube"
 
     def to_dict(self) -> dict:
         payload = asdict(self)
@@ -58,6 +59,7 @@ class Queue:
             current_index=data.get("current_index"),
             total=data.get("total", len(items)),
             lang=data.get("lang", "mandarin"),
+            source_preference=data.get("source_preference", "youtube"),
         )
 
 
@@ -70,6 +72,7 @@ class PlaybackState:
     muted: bool = False
     last_nonzero_volume: int = 50
     lang_preference: str = "mandarin"
+    source_preference: str = "youtube"
     error_code: Optional[str] = None
     message: Optional[str] = None
 
@@ -82,6 +85,7 @@ class PlaybackState:
             "muted": self.muted,
             "last_nonzero_volume": self.last_nonzero_volume,
             "lang_preference": self.lang_preference,
+            "source_preference": self.source_preference,
             "error_code": self.error_code,
             "message": self.message,
         }
@@ -98,7 +102,7 @@ class PlaybackState:
             muted=data.get("muted", False),
             last_nonzero_volume=data.get("last_nonzero_volume", 50),
             lang_preference=data.get("lang_preference", "mandarin"),
+            source_preference=data.get("source_preference", "youtube"),
             error_code=data.get("error_code"),
             message=data.get("message"),
         )
-

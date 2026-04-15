@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from musicd.resolver import Resolver
 from shared.models import Track
@@ -124,6 +125,15 @@ class ResolverTests(unittest.TestCase):
         first_score = resolver._score_track(first, "后会无期").rank_score
         second_score = resolver._score_track(second, "后会无期").rank_score
         self.assertGreater(first_score, second_score)
+
+    def test_build_keyword_queue_only_uses_selected_source(self):
+        resolver = Resolver()
+        track = Track(id="1", title="后会无期", artist="徐良", source="bilibili", page_url="x", stream_url="u")
+        with patch.object(resolver, "_search_keyword_tracks", return_value=[track]) as search_mock:
+            with patch.object(resolver, "_resolve_tracks", return_value=[track]):
+                queue = resolver.build_keyword_queue("后会无期", source_name="b")
+        self.assertEqual(queue.source_preference, "bilibili")
+        self.assertEqual(search_mock.call_args.kwargs["source_names"], ("bilibili",))
 
 
 if __name__ == "__main__":

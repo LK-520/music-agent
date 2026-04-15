@@ -12,6 +12,8 @@ description: 在本机后台播放网络音乐并控制播放状态。适用于 
 - `/music keyword 周杰伦` -> `musicctl --text play "周杰伦"`
 - `/music hot` -> `musicctl --text hot`
 - `/music hot english` -> `musicctl --text hot english`
+- `/music state hermes` -> `musicctl --text state hermes`
+- `/music state openclaw` -> `musicctl --text state openclaw`
 - `/music pause` -> `musicctl --text pause`
 - `/music resume` -> `musicctl --text resume`
 - `/music next` -> `musicctl --text next`
@@ -25,5 +27,9 @@ description: 在本机后台播放网络音乐并控制播放状态。适用于 
 - `/music unmute` -> `musicctl --text unmute`
 - `/music lang` -> `musicctl --text lang`
 - `/music lang 粤语` -> `musicctl --text lang 粤语`
+- `/music source` -> `musicctl --text source`
+- `/music source y` -> `musicctl --text source y`
+- `/music source b` -> `musicctl --text source b`
+- `/music source s` -> `musicctl --text source s`
 
 直接返回命令输出，不打开浏览器，不弹窗。

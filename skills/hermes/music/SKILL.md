@@ -26,6 +26,12 @@ musicctl --text play "<关键词>"
 musicctl --text hot [lang]
 ```
 
+- 如果用户输入的是 `/music state <hermes|openclaw>`，执行：
+
+```bash
+musicctl --text state <hermes|openclaw>
+```
+
 - 其他控制命令直接映射：
 
 ```bash
@@ -42,6 +48,10 @@ musicctl --text mute
 musicctl --text unmute
 musicctl --text lang
 musicctl --text lang 华语
+musicctl --text source
+musicctl --text source y
+musicctl --text source b
+musicctl --text source s
 ```
 
 ## 语种输入
@@ -53,6 +63,12 @@ musicctl --text lang 华语
 - 日语 / 日文 / japanese / jp
 - 韩语 / 韩文 / korean / kr
 - 粤语 / cantonese / yue / hk
+
+以下音源别名都要接受并原样传给 `musicctl`：
+
+- y / yt / youtube / youtube music / ytmusic
+- b / bili / bilibili
+- s / sc / soundcloud
 
 ## 输出
 

@@ -10,6 +10,7 @@ from musicd.source_soundcloud import SoundCloudAdapter
 from musicd.source_youtube import YouTubeAdapter
 from shared.errors import MusicError
 from shared.models import Queue, Track
+from shared.source import DEFAULT_SOURCE, normalize_source
 from shared.utils import (
     clean_artist_name,
     matches_negative_term,
@@ -32,8 +33,15 @@ class Resolver:
             "soundcloud": 0.10,
         }
 
-    def build_keyword_queue(self, query: str, lang_key: str = "mandarin", limit: int = 20) -> Queue:
-        selected = self._search_keyword_tracks(query=query, limit=limit)
+    def build_keyword_queue(
+        self,
+        query: str,
+        lang_key: str = "mandarin",
+        limit: int = 20,
+        source_name: str = DEFAULT_SOURCE,
+    ) -> Queue:
+        source_key = normalize_source(source_name) or DEFAULT_SOURCE
+        selected = self._search_keyword_tracks(query=query, limit=limit, source_names=(source_key,))
         if not selected:
             raise MusicError("NO_RESULTS", f"未找到与“{query}”相关的可播放歌曲")
         tracks = self._resolve_tracks(selected)
@@ -46,15 +54,17 @@ class Resolver:
             current_index=1,
             total=len(tracks),
             lang=lang_key,
+            source_preference=source_key,
         )
 
-    def build_hot_queue(self, lang_key: str, limit: int = 20) -> Queue:
+    def build_hot_queue(self, lang_key: str, limit: int = 20, source_name: str = DEFAULT_SOURCE) -> Queue:
+        source_key = normalize_source(source_name) or DEFAULT_SOURCE
         hot_items = self.hot_chart.get_hot_tracks(lang_key, max(limit * 2, 40))
         selected: List[Track] = []
         for item in hot_items:
             artist = clean_artist_name(item.get("artist_name") or item.get("artist_roles") or "")
             title = item.get("song_name") or ""
-            candidates = self._search_keyword_tracks(f"{artist} {title}".strip(), limit=1)
+            candidates = self._search_keyword_tracks(f"{artist} {title}".strip(), limit=1, source_names=(source_key,))
             if candidates:
                 candidate = candidates[0]
                 candidate.rank_score += 1.0 - (len(selected) * 0.01)
@@ -71,6 +81,7 @@ class Resolver:
             current_index=1,
             total=len(tracks),
             lang=lang_key,
+            source_preference=source_key,
         )
 
     def refresh_stream(self, track: Track) -> Track:
@@ -79,10 +90,10 @@ class Resolver:
         track.resolved_at = time.time()
         return track
 
-    def _search_keyword_tracks(self, query: str, limit: int) -> List[Track]:
+    def _search_keyword_tracks(self, query: str, limit: int, source_names: Sequence[str] | None = None) -> List[Track]:
         all_candidates: List[Track] = []
         search_limit = max(limit * 2, 20)
-        source_names = ("youtube", "bilibili", "soundcloud")
+        source_names = tuple(source_names or ("youtube", "bilibili", "soundcloud"))
         with ThreadPoolExecutor(max_workers=len(source_names)) as executor:
             future_map = {
                 executor.submit(self.adapters[source_name].search, query, search_limit): source_name

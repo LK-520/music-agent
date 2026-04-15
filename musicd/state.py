@@ -10,12 +10,13 @@ from musicd.resolver import Resolver
 from shared.errors import MusicError, invalid_argument
 from shared.lang import DEFAULT_LANG, display_lang, normalize_lang
 from shared.models import PlaybackState, Queue, Track
+from shared.source import DEFAULT_SOURCE, display_source, normalize_source
 from shared.runtime import STATUS_JSON_PATH, ensure_runtime_dir
 
 
 class PlaybackManager:
     def __init__(self) -> None:
-        self.state = PlaybackState(lang_preference=DEFAULT_LANG)
+        self.state = PlaybackState(lang_preference=DEFAULT_LANG, source_preference=DEFAULT_SOURCE)
         self.player = MpvPlayer()
         self.resolver = Resolver()
         self.lock = threading.RLock()
@@ -33,7 +34,11 @@ class PlaybackManager:
         if not query.strip():
             raise invalid_argument("关键词不能为空")
         self.player.ensure_started()
-        queue = self.resolver.build_keyword_queue(query=query.strip(), lang_key=self.state.lang_preference)
+        queue = self.resolver.build_keyword_queue(
+            query=query.strip(),
+            lang_key=self.state.lang_preference,
+            source_name=self.state.source_preference,
+        )
         with self.lock:
             self._replace_queue(queue)
         return self._play_response("play", query)
@@ -43,7 +48,7 @@ class PlaybackManager:
         if not lang_key:
             raise invalid_argument("不支持的语种，请输入 华语/英语/日语/韩语/粤语 或简易英文")
         self.player.ensure_started()
-        queue = self.resolver.build_hot_queue(lang_key=lang_key)
+        queue = self.resolver.build_hot_queue(lang_key=lang_key, source_name=self.state.source_preference)
         with self.lock:
             self._replace_queue(queue)
         return self._play_response("hot", display_lang(lang_key))
@@ -166,6 +171,28 @@ class PlaybackManager:
                 {"ok": True, "action": "lang", "lang": lang_key, "display": display_lang(lang_key)}
             )
 
+    def set_source(self, value: Optional[str]) -> dict:
+        if not value:
+            return self._with_status(
+                {
+                    "ok": True,
+                    "action": "source",
+                    "source": self.state.source_preference,
+                    "display": display_source(self.state.source_preference),
+                }
+            )
+        source_key = normalize_source(value)
+        if not source_key:
+            raise invalid_argument("不支持的音源，请输入 y/youtube、b/bilibili 或 s/soundcloud")
+        with self.lock:
+            self.state.source_preference = source_key
+            if self.state.queue:
+                self.state.queue.source_preference = source_key
+        with self.lock:
+            return self._with_status(
+                {"ok": True, "action": "source", "source": source_key, "display": display_source(source_key)}
+            )
+
     def _replace_queue(self, queue: Queue) -> None:
         self.state.queue = queue
         self._consecutive_failures = 0
@@ -257,6 +284,7 @@ class PlaybackManager:
             "queue_index": self.state.queue.current_index if self.state.queue else None,
             "loop": True,
             "lang": self.state.queue.lang if self.state.queue else self.state.lang_preference,
+            "source_preference": self.state.queue.source_preference if self.state.queue else self.state.source_preference,
             "track": self.state.current_track.to_dict() if self.state.current_track else None,
             "next_track": next_track,
             }
@@ -265,6 +293,7 @@ class PlaybackManager:
     def _status_payload(self) -> dict:
         queue_total = self.state.queue.total if self.state.queue else 0
         queue_index = self.state.queue.current_index if self.state.queue else None
+        source_preference = self.state.queue.source_preference if self.state.queue else self.state.source_preference
         next_track = None
         elapsed_sec = None
         duration_sec = None
@@ -282,6 +311,7 @@ class PlaybackManager:
             "queue_index": queue_index,
             "loop": True,
             "lang": self.state.lang_preference,
+            "source_preference": source_preference,
             "track": self.state.current_track.to_dict() if self.state.current_track else None,
             "next_track": next_track,
             "elapsed_sec": elapsed_sec,

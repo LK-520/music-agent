@@ -46,11 +46,13 @@ class FormatterTests(unittest.TestCase):
                     "queue_index": 1,
                     "queue_total": 20,
                     "lang": "mandarin",
+                    "source_preference": "youtube",
                 },
             }
         )
         self.assertIn("已静音", text)
         self.assertIn("当前播放：周杰伦 - 稻香", text)
+        self.assertIn("音源偏好：YouTube Music", text)
 
 
 if __name__ == "__main__":

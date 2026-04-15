@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 from shared.lang import display_lang
+from shared.source import display_source
 
 
 def _format_status_snapshot(response: dict) -> str:
     if response.get("state") == "idle":
-        return f"当前没有正在播放的音乐｜语种偏好：{display_lang(response.get('lang', 'mandarin'))}"
+        return (
+            f"当前没有正在播放的音乐"
+            f"｜语种偏好：{display_lang(response.get('lang', 'mandarin'))}"
+            f"｜音源偏好：{display_source(response.get('source_preference', 'youtube'))}"
+        )
     if response.get("state") == "error":
         return response.get("message") or "音乐服务异常"
     track = response.get("track") or {}
@@ -24,6 +29,7 @@ def _format_status_snapshot(response: dict) -> str:
         f"｜模式：循环"
         f"｜来源：{track.get('source', 'unknown')}"
         f"｜热榜语种：{display_lang(response.get('lang', 'mandarin'))}"
+        f"｜音源偏好：{display_source(response.get('source_preference', 'youtube'))}"
     )
 
 
@@ -46,6 +52,8 @@ def format_response(response: dict) -> str:
         return "\n".join(lines)
     if not response.get("ok"):
         return response.get("message") or "请求失败"
+    if action == "state":
+        return response.get("message") or "状态栏补丁已执行"
     if action == "play":
         track = response.get("track") or {}
         next_track = response.get("next_track") or {}
@@ -101,4 +109,6 @@ def format_response(response: dict) -> str:
         return _append_status(f"已取消静音，当前音量：{response.get('volume', 0)}", response)
     if action == "lang":
         return _append_status(f"当前热榜语种：{response.get('display')}", response)
+    if action == "source":
+        return _append_status(f"当前默认音源：{response.get('display')}", response)
     return "操作成功"

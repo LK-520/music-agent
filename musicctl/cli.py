@@ -4,8 +4,10 @@ import argparse
 import atexit
 import json
 import signal
+import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import Optional
 
 from musicd.daemon import daemonize
@@ -38,6 +40,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="musicctl")
     parser.add_argument("--text", action="store_true", help="输出中文文本而不是 JSON")
     parser.add_argument("--follow", action="store_true", help="持续显示播放状态，退出时停止音乐服务")
+    parser.add_argument("--detach", action="store_true", help="启动播放后立即返回，不跟随播放状态")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     play_parser = subparsers.add_parser("play")
@@ -55,6 +58,8 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     subparsers.add_parser("mute")
     subparsers.add_parser("unmute")
     subparsers.add_parser("cleanup")
+    state_parser = subparsers.add_parser("state")
+    state_parser.add_argument("target", choices=("hermes", "openclaw"))
     doctor_parser = subparsers.add_parser("doctor")
     doctor_parser.add_argument("--fix", action="store_true")
 
@@ -63,6 +68,9 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
 
     lang_parser = subparsers.add_parser("lang")
     lang_parser.add_argument("value", nargs="?")
+
+    source_parser = subparsers.add_parser("source")
+    source_parser.add_argument("value", nargs="?")
 
     return parser.parse_args(argv)
 
@@ -91,10 +99,14 @@ def build_payload(args: argparse.Namespace) -> dict:
         return {"action": "unmute"}
     if command == "doctor":
         return {"action": "doctor", "fix": args.fix}
+    if command == "state":
+        return {"action": "state", "target": args.target}
     if command == "cleanup":
         return {"action": "cleanup"}
     if command == "lang":
         return {"action": "lang", "value": args.value}
+    if command == "source":
+        return {"action": "source", "value": args.value}
     if command == "volume":
         if args.value == "up":
             return {"action": "volume_up"}
@@ -106,6 +118,13 @@ def build_payload(args: argparse.Namespace) -> dict:
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = parse_args(argv)
+    if args.command == "state":
+        response = _run_statebar_script(args.target)
+        if args.text:
+            print(format_response(response))
+        else:
+            print(json.dumps(response, ensure_ascii=False))
+        return 0 if response.get("ok") else 1
     if args.command == "doctor":
         report = collect_environment_report()
         fix_notes = attempt_environment_fix() if args.fix else []
@@ -151,7 +170,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 1
     ensure_daemon()
     timeout = 300 if args.command in {"play", "hot"} else 20
-    if args.text and args.follow and args.command in {"play", "hot"}:
+    follow_mode = _should_follow_playback(args)
+    if args.text and follow_mode and args.command in {"play", "hot"}:
         print("正在准备播放队列，请稍候...")
     try:
         response = send_request(build_payload(args), timeout=timeout)
@@ -163,7 +183,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(format_response(response))
     else:
         print(json.dumps(response, ensure_ascii=False))
-    if response.get("ok") and args.follow and args.command in {"play", "hot"}:
+    if response.get("ok") and follow_mode and args.command in {"play", "hot"}:
         return follow_playback(text_mode=args.text)
     return 0 if response.get("ok") else 1
 
@@ -195,6 +215,36 @@ def _format_seconds(value: Optional[float]) -> str:
         return "--:--"
     total = max(0, int(value))
     return f"{total // 60:02d}:{total % 60:02d}"
+
+
+def _run_statebar_script(target: str) -> dict:
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / "apply_statebar.py"
+    result = subprocess.run(
+        [sys.executable, str(script_path), target],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    message = (result.stdout or result.stderr or "").strip() or "状态栏脚本未返回任何信息"
+    return {
+        "ok": result.returncode == 0,
+        "action": "state",
+        "target": target,
+        "message": message,
+    }
+
+
+def _should_follow_playback(args: argparse.Namespace) -> bool:
+    if args.command not in {"play", "hot"}:
+        return False
+    if args.detach:
+        return False
+    if args.follow:
+        return True
+    # In an interactive terminal, default to an attached playback session so Ctrl+C
+    # behaves like "stop and clean up". Non-interactive callers such as Hermes still
+    # get the old fire-and-return behavior.
+    return bool(sys.stdin.isatty() and sys.stdout.isatty())
 
 
 def _print_follow_status(response: dict, previous_signature: Optional[str]) -> str:

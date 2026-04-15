@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import html
 import json
+import re
 from urllib.parse import quote
+from urllib.request import Request, urlopen
 from typing import List
 
 from musicd.source_base import SourceAdapter
@@ -13,8 +15,55 @@ from shared.utils import clean_artist_name, duration_to_seconds, run_subprocess
 
 class BilibiliAdapter(SourceAdapter):
     source_name = "bilibili"
+    _RESULT_PATTERN = re.compile(
+        r'bvid:"(?P<bvid>(?:\\.|[^"\\])+)".*?title:"(?P<title>(?:\\.|[^"\\])*)".*?author:"(?P<author>(?:\\.|[^"\\])*)".*?duration:"(?P<duration>(?:\\.|[^"\\])*)".*?pic:"(?P<pic>(?:\\.|[^"\\])*)"',
+        re.S,
+    )
 
     def search(self, query: str, limit: int) -> List[Track]:
+        tracks = self._search_webpage(query, limit)
+        if tracks:
+            return tracks[:limit]
+        return self._search_api(query, limit)
+
+    def _search_webpage(self, query: str, limit: int) -> List[Track]:
+        request = Request(
+            f"https://search.bilibili.com/all?keyword={quote(query)}",
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        try:
+            with urlopen(request, timeout=20) as response:
+                text = response.read().decode("utf-8", "ignore")
+        except Exception:
+            return []
+        tracks: List[Track] = []
+        seen: set[str] = set()
+        for match in self._RESULT_PATTERN.finditer(text):
+            bvid = match.group("bvid")
+            if not bvid or bvid in seen:
+                continue
+            seen.add(bvid)
+            title = self._decode_js_string(match.group("title"))
+            title = html.unescape(title).replace('<em class="keyword">', "").replace("</em>", "")
+            author = clean_artist_name(self._decode_js_string(match.group("author")))
+            duration = duration_to_seconds(self._decode_js_string(match.group("duration")) or "")
+            thumbnail = self._normalize_thumbnail_url(self._decode_js_string(match.group("pic")))
+            tracks.append(
+                Track(
+                    id=bvid,
+                    title=title,
+                    artist=author,
+                    source=self.source_name,
+                    page_url=f"https://www.bilibili.com/video/{bvid}",
+                    duration_sec=duration,
+                    thumbnail_url=thumbnail,
+                )
+            )
+            if len(tracks) >= limit:
+                break
+        return tracks
+
+    def _search_api(self, query: str, limit: int) -> List[Track]:
         per_page = 20
         pages = max(1, (limit + per_page - 1) // per_page)
         tracks: List[Track] = []
@@ -65,6 +114,21 @@ class BilibiliAdapter(SourceAdapter):
                 if len(tracks) >= limit:
                     return tracks
         return tracks
+
+    def _decode_js_string(self, value: str) -> str:
+        if not value:
+            return ""
+        try:
+            return json.loads(f'"{value}"')
+        except json.JSONDecodeError:
+            return value
+
+    def _normalize_thumbnail_url(self, value: str) -> str:
+        if not value:
+            return ""
+        if value.startswith("//"):
+            return f"https:{value}"
+        return value
 
     def resolve_stream(self, track: Track) -> str:
         base_command = get_yt_dlp_command()
