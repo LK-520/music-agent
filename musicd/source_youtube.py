@@ -8,12 +8,17 @@ from musicd.source_base import SourceAdapter
 from shared.environment import get_yt_dlp_command
 from shared.models import Track
 from shared.utils import clean_artist_name, run_subprocess
+from shared.ytmusic_artist import is_artist_only_query, search_artist_top_tracks
 
 
 class YouTubeAdapter(SourceAdapter):
     source_name = "youtube"
 
     def search(self, query: str, limit: int) -> List[Track]:
+        if is_artist_only_query(query):
+            artist_tracks = search_artist_top_tracks(query, limit)
+            if artist_tracks:
+                return artist_tracks
         base_command = get_yt_dlp_command()
         if not base_command:
             return []

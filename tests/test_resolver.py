@@ -135,6 +135,28 @@ class ResolverTests(unittest.TestCase):
         self.assertEqual(queue.source_preference, "bilibili")
         self.assertEqual(search_mock.call_args.kwargs["source_names"], ("bilibili",))
 
+    def test_single_source_search_preserves_adapter_order(self):
+        resolver = Resolver()
+        first = Track(
+            id="first",
+            title="多遠都要在一起",
+            artist="",
+            source="youtube",
+            page_url="https://music.youtube.com/watch?v=first",
+            rank_score=3.0,
+        )
+        third_like = Track(
+            id="third",
+            title="邓紫棋狂飙《多远都要在一起》爆发力十足",
+            artist="",
+            source="youtube",
+            page_url="https://music.youtube.com/watch?v=third",
+            rank_score=2.0,
+        )
+        with patch.object(resolver.adapters["youtube"], "search", return_value=[first, third_like]):
+            results = resolver._search_keyword_tracks("多远都要在一起 邓紫棋", 5, source_names=("youtube",))
+        self.assertEqual([track.id for track in results[:2]], ["first", "third"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -177,6 +177,42 @@ musicctl --text state hermes
 musicctl --text state openclaw
 ```
 
+## The `state` Command
+
+Use `state` to patch the host CLI so `music-agent` can render now-playing information directly in the status area.
+
+### Usage
+
+```bash
+musicctl --text state hermes
+musicctl --text state openclaw
+```
+
+### Current Behavior
+
+- `musicctl --text state hermes`
+  Automatically finds the local Hermes installation and patches the Hermes TUI status area.
+- `musicctl --text state openclaw`
+  Reserved for future support and not implemented yet.
+
+### What Hermes Gets
+
+- automatic Hermes path discovery instead of a single hard-coded path
+- a dedicated music status row above the original status bar
+- live current-track and next-track display
+- re-running the command updates the patch instead of skipping it
+
+### Recommended Flow
+
+- Run `musicctl --text state hermes`
+- Restart Hermes
+- Start playback with `/music ...`
+- Watch the status area update in real time
+
+### Preview
+
+![Hermes state bar](assets/state-hermes.png)
+
 ## Supported Hot Languages
 
 The hot-chart feature maps user-friendly aliases to internal language keys:

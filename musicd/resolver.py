@@ -94,6 +94,7 @@ class Resolver:
         all_candidates: List[Track] = []
         search_limit = max(limit * 2, 20)
         source_names = tuple(source_names or ("youtube", "bilibili", "soundcloud"))
+        preserve_source_order = len(source_names) == 1
         with ThreadPoolExecutor(max_workers=len(source_names)) as executor:
             future_map = {
                 executor.submit(self.adapters[source_name].search, query, search_limit): source_name
@@ -105,9 +106,14 @@ class Resolver:
                 except Exception:
                     continue
                 filtered = [track for track in raw_tracks if self._is_track_allowed(track)]
-                scored = [self._score_track(track, query) for track in filtered]
-                all_candidates.extend(scored)
+                if preserve_source_order:
+                    all_candidates.extend(filtered)
+                else:
+                    scored = [self._score_track(track, query) for track in filtered]
+                    all_candidates.extend(scored)
         deduped = self._dedupe(all_candidates)
+        if preserve_source_order:
+            return deduped[:limit]
         ranked = sorted(deduped, key=lambda item: item.rank_score, reverse=True)
         return ranked[:limit]
 

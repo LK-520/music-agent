@@ -177,6 +177,41 @@ musicctl --text state hermes
 musicctl --text state openclaw
 ```
 
+## `state` 指令
+
+`state` 用来给宿主 CLI 打补丁，把 `music-agent` 的当前播放状态直接显示到界面状态栏里。
+
+### 用法
+
+```bash
+musicctl --text state hermes
+musicctl --text state openclaw
+```
+
+### 当前行为
+
+- `musicctl --text state hermes`
+  自动查找 Hermes 安装位置，并给 Hermes 的 TUI 状态栏打补丁。
+- `musicctl --text state openclaw`
+  当前只保留接口，暂未实现。
+
+### Hermes 会发生什么
+
+- 自动发现 Hermes 安装位置，而不是只依赖固定路径
+- 在原状态栏上方新增一条音乐状态栏
+- 实时显示当前播放歌曲和下一首歌曲
+- 再次执行时会自动更新补丁，而不是跳过
+
+### 使用建议
+
+- 执行一次 `musicctl --text state hermes`
+- 重启 Hermes
+- 然后用 `/music ...` 开始播放，就能在状态栏看到当前歌曲信息
+
+### 效果图
+
+![Hermes state bar](assets/state-hermes.png)
+
 ## 支持的热榜语种
 
 热榜功能支持用户友好的语种别名，并会自动归一化到内部枚举：
