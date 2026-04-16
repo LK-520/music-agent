@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>music-agent | Terminal-First Music Agent for Hermes & OpenClaw</title>
+  <meta
+    name="description"
+    content="music-agent 是一个面向 Hermes 与 OpenClaw 的本地后台音乐代理。不开浏览器，不弹额外窗口，不落盘保存音频文件。"
+  >
+  <meta property="og:title" content="music-agent">
+  <meta
+    property="og:description"
+    content="Terminal-first music agent for Hermes and OpenClaw with local background playback, hot charts, source switching, and a live Hermes status bar."
+  >
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="./assets/music-agent-mark.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <div class="hero-glow hero-glow-a"></div>
+    <div class="hero-glow hero-glow-b"></div>
+
+    <header class="topbar">
+      <a class="brand" href="https://github.com/LK-520/music-agent" target="_blank" rel="noreferrer">
+        <img src="./assets/music-agent-mark.svg" alt="music-agent logo">
+        <span>music-agent</span>
+      </a>
+
+      <nav class="top-actions">
+        <a class="ghost-link" href="https://github.com/LK-520/music-agent/blob/master/README.zh-CN.md" target="_blank" rel="noreferrer">中文 README</a>
+        <a class="ghost-link" href="https://github.com/LK-520/music-agent/blob/master/README.md" target="_blank" rel="noreferrer">English README</a>
+        <a class="primary-link" href="https://github.com/LK-520/music-agent" target="_blank" rel="noreferrer">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Terminal-native Music Agent</p>
+          <h1>让 Hermes 与 OpenClaw 拥有一个真正能播放音乐的本地 Agent</h1>
+          <p class="hero-text">
+            `music-agent` 把 slash command、后台播放、热门榜单、音源切换和状态栏展示串成一条完整链路。
+            你只需要输入 `/music ...`，剩下的搜索、解析、播放、切歌和终端反馈都在本地完成。
+          </p>
+
+          <div class="pill-row">
+            <span>Hermes Ready</span>
+            <span>OpenClaw Ready</span>
+            <span>mpv Powered</span>
+            <span>YouTube Music / Bilibili / SoundCloud</span>
+          </div>
+
+          <div class="cta-row">
+            <a class="button button-primary" href="https://github.com/LK-520/music-agent" target="_blank" rel="noreferrer">查看仓库</a>
+            <a class="button button-secondary" href="https://github.com/LK-520/music-agent/blob/master/README.zh-CN.md" target="_blank" rel="noreferrer">快速上手</a>
+          </div>
+        </div>
+
+        <div class="hero-card">
+          <div class="terminal-window">
+            <div class="terminal-dots">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <div class="terminal-body">
+              <p><span class="prompt">$</span> /music state hermes</p>
+              <p class="success">Hermes 状态栏音乐补丁已更新</p>
+              <p><span class="prompt">$</span> /music source y</p>
+              <p class="success">当前音源偏好：YouTube Music</p>
+              <p><span class="prompt">$</span> /music keyword 邓紫棋</p>
+              <p class="muted">已开始播放相关队列，共 20 首</p>
+              <div class="mini-player">
+                <div class="mini-player-title">♪ 正在播放：唯一 - G.E.M. 邓紫棋</div>
+                <div class="mini-player-sub">下一首：多远都要在一起</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="stats-grid">
+        <article class="stat-card">
+          <strong>本地后台播放</strong>
+          <span>不开浏览器，不弹额外窗口，不把音频文件保存到本地。</span>
+        </article>
+        <article class="stat-card">
+          <strong>完整控制链路</strong>
+          <span>支持 `play`、`hot`、`next`、`prev`、`pause`、`resume`、`mute`、`stop`、`status`。</span>
+        </article>
+        <article class="stat-card">
+          <strong>真实 CLI 集成</strong>
+          <span>`state` 指令可直接把当前歌曲和下一首歌显示到 Hermes 状态栏。</span>
+        </article>
+      </section>
+
+      <section class="section-block">
+        <div class="section-heading">
+          <p class="eyebrow">Why This Project</p>
+          <h2>不是播放器壳子，而是适合终端工作流的音乐代理</h2>
+          <p>
+            这个项目的重点不是做一个花哨播放器，而是把“终端里想听歌”这件事打磨成一个自然动作。
+            你可以在写代码、跑 CLI、用 agent 的同时，让音乐播放保持轻量、安静、可控。
+          </p>
+        </div>
+
+        <div class="feature-grid">
+          <article class="feature-card">
+            <h3>关键词队列</h3>
+            <p>支持按关键词生成最多 20 首播放队列，适合听单曲、歌手名或主题词。</p>
+          </article>
+          <article class="feature-card">
+            <h3>KKBOX 热榜</h3>
+            <p>基于 KKBOX 风云榜日榜取热歌，再去指定音源里拿可播放版本。</p>
+          </article>
+          <article class="feature-card">
+            <h3>语种与音源切换</h3>
+            <p>支持 `华语 / 英语 / 日语 / 韩语 / 粤语`，也支持 `y / b / s` 快速切换单一音源。</p>
+          </article>
+          <article class="feature-card">
+            <h3>状态栏补丁</h3>
+            <p>一条命令即可给 Hermes 打补丁，把当前播放与下一首直接塞进状态区域。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section-block architecture-block">
+        <div class="section-heading">
+          <p class="eyebrow">Architecture</p>
+          <h2>从 slash command 到声音输出，链路清晰可控</h2>
+        </div>
+
+        <div class="flow-strip">
+          <span>/music ...</span>
+          <span>musicctl</span>
+          <span>musicd</span>
+          <span>source adapters</span>
+          <span>mpv</span>
+        </div>
+
+        <div class="architecture-grid">
+          <article class="feature-card dark-card">
+            <h3>musicctl</h3>
+            <p>CLI 入口。负责命令解析、状态输出、安装辅助和与守护进程的交互。</p>
+          </article>
+          <article class="feature-card dark-card">
+            <h3>musicd</h3>
+            <p>后台守护进程。负责队列、切歌、播放状态、音量与控制消息分发。</p>
+          </article>
+          <article class="feature-card dark-card">
+            <h3>Source Adapters</h3>
+            <p>支持 YouTube Music、Bilibili、SoundCloud，不同命令可以按你的偏好切换。</p>
+          </article>
+          <article class="feature-card dark-card">
+            <h3>mpv</h3>
+            <p>真正负责本地音频输出，并附带 now playing 标题与封面元数据。</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section-block command-block">
+        <div class="section-heading">
+          <p class="eyebrow">CLI Experience</p>
+          <h2>围绕真实使用场景设计的命令面</h2>
+        </div>
+
+        <div class="command-layout">
+          <div class="code-card">
+            <div class="code-card-title">Quick Start</div>
+            <pre><code>git clone git@github.com:LK-520/music-agent.git
+cd music-agent
+./scripts/install_hermes_skill.sh
+musicctl --text state hermes
+musicctl --text source y
+musicctl --text play "后会无期"</code></pre>
+          </div>
+
+          <div class="command-groups">
+            <article class="command-card">
+              <h3>播放</h3>
+              <p>`/music keyword 周杰伦`</p>
+              <p>`/music hot english`</p>
+            </article>
+            <article class="command-card">
+              <h3>控制</h3>
+              <p>`/music pause`</p>
+              <p>`/music next`</p>
+              <p>`/music stop`</p>
+            </article>
+            <article class="command-card">
+              <h3>状态</h3>
+              <p>`/music status`</p>
+              <p>`/music source b`</p>
+              <p>`/music lang 粤语`</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-block screenshot-block">
+        <div class="section-heading">
+          <p class="eyebrow">Hermes State Bar</p>
+          <h2>`state` 指令把“当前播放 + 下一首”直接放进 CLI 里</h2>
+          <p>
+            `musicctl --text state hermes` 会自动查找本机 Hermes 安装位置并打补丁。
+            打完补丁后，Hermes 状态栏上方会多出一条音乐状态栏，适合边工作边听歌。
+          </p>
+        </div>
+
+        <div class="screenshot-frame">
+          <img src="./assets/state-hermes.png" alt="Hermes state bar with music-agent now playing row">
+        </div>
+      </section>
+
+      <section class="section-block footer-cta">
+        <div class="footer-copy">
+          <p class="eyebrow">Open Source</p>
+          <h2>想要一个真正能用的 terminal music agent，这里就是完整起点</h2>
+          <p>
+            仓库内已经包含 CLI、daemon、source adapters、Hermes skill、状态栏补丁逻辑、
+            测试和中英文文档，适合直接试用、二次开发或继续扩展到 OpenClaw。
+          </p>
+        </div>
+
+        <div class="cta-row">
+          <a class="button button-primary" href="https://github.com/LK-520/music-agent" target="_blank" rel="noreferrer">Star on GitHub</a>
+          <a class="button button-secondary" href="https://github.com/LK-520/music-agent/blob/master/README.zh-CN.md" target="_blank" rel="noreferrer">阅读文档</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>MIT Licensed</span>
+      <span>Built for Hermes / OpenClaw / terminal-first workflows</span>
+    </footer>
+  </div>
+</body>
+</html>
